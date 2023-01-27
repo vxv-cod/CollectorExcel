@@ -1,11 +1,14 @@
 import os
+# from pprint import pp
 from time import sleep
+# import time
 import win32com.client
 import threading
 from pythoncom import CoInitializeEx as pythoncomCoInitializeEx
 from PyQt5 import QtCore, QtWidgets
 import sys
 import traceback
+import Raskraska
 
 from okno_ui import Ui_Form
 from  vxv_tnnc_SQL_Pyton import Sql
@@ -29,6 +32,13 @@ def thread(my_func):
     def wrapper():
         threading.Thread(target=my_func, daemon=True).start()
     return wrapper
+# 
+# def thread_args(my_func):
+#     def wrapper(*args):
+#         threading.Thread(target=my_func, args=args, daemon=True).start()
+#     return wrapper
+
+
 
 def colorBar(progBar, color):
     # progBar.setStyleSheet("QProgressBar::chunk {background-color: rgb(170, 170, 170); margin: 2px;}")
@@ -43,7 +53,7 @@ def Book():
 
 def importdataCode(sheet, StartRow, StartColl, EndRow, EndColl):
     '''Собираем список из 1ой колонки'''
-    vals = sheet.Range(sheet.Cells(StartRow, StartColl), sheet.Cells(EndRow, EndColl)).value
+    vals = sheet.Range(sheet.Cells(StartRow, StartColl), sheet.Cells(EndRow, EndColl)).Value
     vals = [vals[i][x] for i in range(len(vals)) for x in range(len(vals[i]))]
     return vals
 
@@ -120,13 +130,13 @@ def GO():
             SH_sheet.Paste()
 
             sheet = wb.Worksheets("Штамп")
-            val = sheet.Range("H2").value
+            val = sheet.Range("H2").Value
             # val = sheet.Range("H2").Formula
             nom = val.find("-Р-")
             # nom = val.index("-Р-")
             shifr = val[:nom]
 
-            SH_sheet.Range(SH_sheet.Cells(SH_StartRow, 1), SH_sheet.Cells(SH_EndRow, 2)).value = [shifr, val] * countRow
+            SH_sheet.Range(SH_sheet.Cells(SH_StartRow, 1), SH_sheet.Cells(SH_EndRow, 2)).Value = [shifr, val] * countRow
 
             cel = importdataCode(SH_sheet, SH_StartRow, 7, SH_EndRow, 7)
             sistColl = []
@@ -152,8 +162,8 @@ def GO():
                     sistColl.append((defaultval, ))
                     searchList.append((None, ))
             
-            SH_sheet.Range(SH_sheet.Cells(SH_StartRow, 3), SH_sheet.Cells(SH_EndRow, 3)).value = sistColl
-            SH_sheet.Range(SH_sheet.Cells(SH_StartRow, 4), SH_sheet.Cells(SH_EndRow, 4)).value = searchList
+            SH_sheet.Range(SH_sheet.Cells(SH_StartRow, 3), SH_sheet.Cells(SH_EndRow, 3)).Value = sistColl
+            SH_sheet.Range(SH_sheet.Cells(SH_StartRow, 4), SH_sheet.Cells(SH_EndRow, 4)).Value = searchList
 
             SH_StartRow = SH_EndRow + 1
 
@@ -190,6 +200,8 @@ class Signals(QtCore.QObject):
     signal_err = QtCore.pyqtSignal(str)
     signal_bool = QtCore.pyqtSignal(bool)
     signal_color = QtCore.pyqtSignal(list)
+    
+    signal_Cursor = QtCore.pyqtSignal(bool)
 
     def __init__(self, parent=None):
         QtCore.QThread.__init__(self, parent)
@@ -198,6 +210,8 @@ class Signals(QtCore.QObject):
         self.signal_err.connect(self.on_change_err,QtCore.Qt.QueuedConnection)
         self.signal_bool.connect(self.on_change_bool,QtCore.Qt.QueuedConnection)
         self.signal_color.connect(self.on_change_color,QtCore.Qt.QueuedConnection)
+
+        self.signal_Cursor.connect(self.on_change_Cursor,QtCore.Qt.QueuedConnection)
 
     '''Отправляем сигналы в элементы окна'''
     def on_change_Probar(self, s):
@@ -210,6 +224,13 @@ class Signals(QtCore.QObject):
         colorBar(ui.progressBar_1, color = s)
     def on_change_bool(self, s):
         ui.pushButton.setDisabled(s)
+        ui.pushButton_4.setDisabled(s)
+
+    def on_change_Cursor(self, s):
+        if s == True:
+            Form.setCursor(QtCore.Qt.WaitCursor)    # курсор мыши - Часы
+        else:
+            Form.unsetCursor()                      # Отменить форму мыши.
 
 sig = Signals()
 
@@ -232,6 +253,62 @@ def start():
     sig.signal_Probar.emit(100)
     sig.signal_label.emit("Выполнено")
 
+
+# @thread
+# def timecount():
+    # chas = 0
+    # minyta = 0
+    # secynda = 0
+    # while ui.progressBar_1.value() != 100:
+    #     sleep(1)
+    #     secynda += 1
+    #     if secynda == 60:
+    #         secynda = 0
+    #         minyta +=1
+    #         if minyta == 60:
+    #             minyta = 0
+    #             chas += 1
+    #     text = f'{str(chas).zfill(2)} : {str(minyta).zfill(2)} : {str(secynda).zfill(2)}'
+    #     sig.signal_label.emit(f"Время выполнения: {text} s")
+    # sig.signal_label.emit(f"Выполнено: {text} s")
+
+
+    # while ui.progressBar_1.value() != 100:
+    #     # end_time = round(time.time() - start_time, 1)
+    #     sig.signal_color.emit([255, 170, 127])
+    #     sleep(1)
+    #     sig.signal_color.emit([100, 150, 150])
+    #     sleep(1)
+    # sig.signal_color.emit([170, 170, 170])
+
+
+
+
+
+@thread
+def funRaskraska():
+    sig.signal_Cursor.emit(True)
+    sig.signal_Probar.emit(0)
+    try:
+        Sql("CollectorExcel")
+        # timecount()
+        sig.signal_bool.emit(True)
+        sig.signal_Probar.emit(0)
+        sig.signal_color.emit([100, 150, 150])    
+        Raskraska.GO(sig)
+        sig.signal_Cursor.emit(False)
+    except Exception as e:
+        sig.signal_Cursor.emit(False)
+        print(str(traceback.print_tb))
+        errortext = traceback.format_exc()
+        text = f"Сбор МТР не выполнен, повторите попытку \n\n{errortext}"
+        sig.signal_err.emit(text)
+    sig.signal_bool.emit(False)
+    sig.signal_Probar.emit(100)
+    sig.signal_color.emit([170, 170, 170])
+    sig.signal_label.emit("Выполнено")
+
+
 def openSistema():
     '''открытие файла как при двойном клике'''
     os.startfile('Sistema.ini')
@@ -240,12 +317,13 @@ def openTypeMTR():
     '''открытие файла как при двойном клике'''
     os.startfile('TypeMTR.ini')
 
+
 ui.pushButton.clicked.connect(start)
 ui.pushButton_2.clicked.connect(openSistema)
 ui.pushButton_3.clicked.connect(openTypeMTR)
+ui.pushButton_4.clicked.connect(funRaskraska)
 
-# xxx = "Закрытие файлов" + " .." * 5
-# print(f"xxx = {xxx}")
+
 if __name__ == "__main__":
     # start()
     sys.exit(app.exec_())
